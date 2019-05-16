@@ -9,10 +9,11 @@ last edit: 2017. 02. 23
 import sys
 import logging
 import logging.config
+import PyQt5
 from PyQt5.QAxContainer import QAxWidget
 from PyQt5.QtCore import QEventLoop
 from PyQt5.QtWidgets import QApplication
-#from pandas import DataFrame
+from pandas import DataFrame
 import time
 import numpy as np
 from datetime import datetime
@@ -100,12 +101,15 @@ class Kiwoom(QAxWidget):
         """
         try:
             if return_code == ReturnCode.OP_ERR_NONE:
-                if self.get_login_info("GetServerGubun", True):
+                if self.GetLoginInfo("GetServerGubun", True):
                     self.msg += "실서버 연결 성공" + "\r\n\r\n"
+                    print("실서버 연결 성공" + "\r\n\r\n")
                 else:
                     self.msg += "모의투자서버 연결 성공" + "\r\n\r\n"
+                    print("모의투자서버 연결 성공" + "\r\n\r\n")
             else:
                 self.msg += "연결 끊김: 원인 - " + ReturnCode.CAUSE[return_code] + "\r\n\r\n"
+                print("연결 끊김: 원인 - " + ReturnCode.CAUSE[return_code] + "\r\n\r\n")
         except Exception as error:
             self.log.error('eventConnect {}'.format(error))
         finally:
@@ -117,6 +121,7 @@ class Kiwoom(QAxWidget):
                 pass
 
     def receive_msg(self, screen_no, request_name, tr_code, msg):
+        print('msg :',screen_no,request_name, tr_code, msg)
         """
         수신 메시지 이벤트
 
@@ -307,15 +312,16 @@ class Kiwoom(QAxWidget):
     # 메서드 정의: 로그인 관련 메서드                                    #
     ###############################################################
 
-    def comm_connect(self):
+    def CommConnect(self):
         """
         로그인을 시도합니다.
 
         수동 로그인일 경우, 로그인창을 출력해서 로그인을 시도.
         자동 로그인일 경우, 로그인창 출력없이 로그인 시도.
         """
-        print('comm connetc')
+        print('comm connect')
         self.dynamicCall("CommConnect()")
+        "call --> On EventConnect"
         self.login_loop = QEventLoop()
         self.login_loop.exec_()
         return 0
@@ -330,8 +336,21 @@ class Kiwoom(QAxWidget):
         """
         ret = self.dynamicCall("GetConnectState()")
         return ret
-
-    def get_login_info(self, tag, is_connect_state=False):
+    
+    
+   
+    
+    def GetLoginInfo_All(self):
+        lst = ['ACCOUNT_CNT', 'ACCNO', 'USER_ID', 'USER_NAME']
+        dic = {}
+        
+        for n in lst:
+            dic[n] = self.GetLoginInfo(n)
+        return dic
+    
+        
+        
+    def GetLoginInfo(self, tag, is_connect_state=False):
         """
         사용자의 tag에 해당하는 정보를 반환한다.
 
@@ -346,24 +365,20 @@ class Kiwoom(QAxWidget):
         :param is_connect_state: bool - 접속상태을 확인할 필요가 없는 경우 True로 설정.
         :return: string
         """
-        if not is_connect_state:
-            if not self.get_connect_state():
-                raise KiwoomConnectError()
+#        if not is_connect_state:
+#            if not self.get_connect_state():
+#                raise KiwoomConnectError()
 
         if not isinstance(tag, str):
             raise ParameterTypeError()
 
-        if tag not in ['ACCOUNT_CNT', 'ACCNO', 'USER_ID', 'USER_NAME', 'GetServerGubun']:
+        if tag not in ['ACCOUNT_CNT', 'ACCNO', 'USER_ID', 'USER_NAME']:
             raise ParameterValueError()
 
         cmd = 'GetLoginInfo("%s")' % tag
         info = self.dynamicCall(cmd)
 
-        if tag == 'GetServerGubun' and info == "":
-            if self.server_gubun == None:
-                account_list = self.get_login_info("ACCNO").split(';')
-                self.send_order("서버구분", "0102", account_list[0], 1, "066570", 0, 0, "05", "")
-            info = self.server_gubun
+        
         return info
 
     #################################################################
@@ -1039,43 +1054,36 @@ class KiwoomConnectError(Exception):
 
 
 
+def test0():
+    """
+    "ACCOUNT_CNT" : 보유계좌 수를 반환합니다.
+      "ACCLIST" 또는 "ACCNO" : 구분자 ';'로 연결된 보유계좌 목록을 반환합니다.
+      "USER_ID" : 사용자 ID를 반환합니다.
+      "USER_NAME" : 사용자 이름을 반환합니다.
+      "KEY_BSECGB" : 키보드 보안 해지여부를 반환합니다.(0 : 정상, 1 : 해지)
+      "FIREW_SECGB" : 방화벽 설정여부를 반환합니다.(0 : 미설정, 1 : 설정, 2 : 해지)
+      "GetServerGubun" : 접속서버 구분을 반환합니다.(1 : 모의투자, 나머지 : 실서버)
+          
+    """
+    kiwoom.dynamicCall('GetLoginInfo("ACCNO")')
+    kiwoom.dynamicCall('GetLoginInfo("GetServerGubun")')
+    
+    
+    
 
-if __name__ == "__main__":
     
-    app = QApplication(sys.argv)
-#    kk = Kiwoom()
-#    def fun(name,*arg):
-#        global kk
-#        ret = getattr(kk,name)(*arg)
-#        print(ret)
-#        return ret
-#    from multiprocessing import Manager
-#    manager = Manager()
-#    call = manager.dict()
-#    while True:
-#        time.sleep(1)
-#        print(call)
-    
-#    from multiprocessing.managers import BaseManager
-#    from queue import Queue
-    
-    
-    
-    from multiprocessing.connection import Listener
-    from array import array
-    
-    address = ('localhost', 6000)     # family is deduced to be 'AF_INET'
-    listener = Listener(address, authkey=b'abc')
-    
-    conn = listener.accept()
-    print ('connection accepted from', listener.last_accepted)
-    
-    conn.send([2.25, None, 'junk', float])
-    
-    conn.send_bytes('hello')
-    
-#    conn.send_bytes(array('i', [42, 1729]))
-    
-    conn.close()
-    listener.close()
+#if __name__ == "__main__":
+app = QApplication(sys.argv)
+kiwoom = Kiwoom()
+kiwoom.CommConnect()
+print(kiwoom.GetLoginInfo_All())
+kiwoom.dynamicCall('GetLoginInfo("ACCNO")')
 
+
+#test0()
+
+    # Test Code
+    
+
+#    data = kiwoom.get_data_opt10086("035420", "20170101")
+#    print(len(data))
