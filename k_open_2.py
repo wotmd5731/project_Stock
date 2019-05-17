@@ -17,6 +17,9 @@ import numpy as np
 from datetime import datetime
 from define import RealType,FidList,ReturnCode
 
+import queue
+
+
 
 
 
@@ -26,13 +29,15 @@ class Kiwoom(QAxWidget):
         print('setup kiwoom')
         self.setControl("KHOPENAPI.KHOpenAPICtrl.1")
         self.scr_num ='99'
+        self.q = queue.Queue(maxsize=50)
+        
         # Loop 변수
         # 비동기 방식으로 동작되는 이벤트를 동기화(순서대로 동작) 시킬 때
         self.login_loop = None
         self.request_loop = None
         self.order_loop = None
         self.condition_loop = None
-
+        self.tr_event_loop = None
         # 서버구분
         self.server_gubun = None
 
@@ -74,7 +79,7 @@ class Kiwoom(QAxWidget):
     
     def _OnReceiveTrData(self, screen_no, request_name, tr_code, record_name, sPrevNext, unused0, unused1, unused2,
                            unused3):
-        print('_OnReceiveTrData,',screen_no,request_name,tr_code,sPrevNext)
+        print('_OnReceiveTrData,',screen_no,request_name,tr_code,record_name,sPrevNext)
         """
         BSTR sScrNo,       // 화면번호
           BSTR sRQName,      // 사용자 구분명
@@ -90,16 +95,21 @@ class Kiwoom(QAxWidget):
             
         if request_name=='일데이터' and tr_code == 'opt10081':
             print(self.GetCommDataEx(tr_code,record_name))
-        
+        if request_name=='주식기본정보요청' and tr_code == 'opt10001':
+            lst = ['종목코드','종목명','자본금','액면가','상장주식','신용비율','외인소진률','시가총액','PER','EPS','BPS','PBR','매출액','영업이익','당기순이익','시가','고가','저가','기준가','현재가','전일대비','등락율','거래량','거래대비','유통주식','유통비율']
+#            print(self.GetRepeatCnt(tr_code,request_name))
+            for st in lst:
+                print(st,' : ', self.GetCommData(tr_code,"", request_name, 0,st))
+            
+            
+        self.tr_event_loop.exit()
         
 
     def _OnEventConnect(self, return_code):
         """
         통신 연결 상태 변경시 이벤트
-
         return_code 0이면 로그인 성공
         그 외에는 ReturnCode 클래스 참조.
-
         :param return_code: int
         """
         if return_code==0:
@@ -120,7 +130,25 @@ class Kiwoom(QAxWidget):
         :param tr_code: string
         :param msg: string - 서버로 부터의 메시지
         """
+    def GetRepeatCnt(self, tr_code, request_name):
+        """
+        서버로 부터 전달받은 데이터의 갯수를 리턴합니다.(멀티데이터의 갯수)
 
+        receiveTrData() 이벤트 메서드가 호출될 때, 그 안에서 사용해야 합니다.
+
+        키움 OpenApi+에서는 데이터를 싱글데이터와 멀티데이터로 구분합니다.
+        싱글데이터란, 서버로 부터 전달받은 데이터 내에서, 중복되는 키(항목이름)가 하나도 없을 경우.
+        예를들면, 데이터가 '종목코드', '종목명', '상장일', '상장주식수' 처럼 키(항목이름)가 중복되지 않는 경우를 말합니다.
+        반면 멀티데이터란, 서버로 부터 전달받은 데이터 내에서, 일정 간격으로 키(항목이름)가 반복될 경우를 말합니다.
+        예를들면, 10일간의 일봉데이터를 요청할 경우 '종목코드', '일자', '시가', '고가', '저가' 이러한 항목이 10번 반복되는 경우입니다.
+        이러한 멀티데이터의 경우 반복 횟수(=데이터의 갯수)만큼, 루프를 돌면서 처리하기 위해 이 메서드를 이용하여 멀티데이터의 갯수를 얻을 수 있습니다.
+
+        :param tr_code: string
+        :param request_name: string - TR 요청명(comm_rq_data() 메소드 호출시 사용된 request_name)
+        :return: int
+        """
+        ret = self.dynamicCall("GetRepeatCnt(QString, QString)", tr_code, request_name)
+        return ret
     def GetCommDataEx(self, tr_code, multi_data_name):
         """
         멀티데이터 획득 메서드
@@ -133,6 +161,11 @@ class Kiwoom(QAxWidget):
         """
         data = self.dynamicCall("GetCommDataEx(QString, QString)", tr_code, multi_data_name)
         return data
+    def GetCommData(self, tr_code, real_type, rqname, index, item_name):
+        ret = self.dynamicCall("CommGetData(QString, QString, QString, int, QString)", tr_code,
+                               real_type, rqname, index, item_name)
+        return ret.strip()
+
     
     def CommConnect(self):
         self.dynamicCall('CommConnect()')
@@ -177,32 +210,45 @@ class Kiwoom(QAxWidget):
     def SetInputValue(self, id, value):
         self.dynamicCall("SetInputValue(QString, QString)", id, value)
     
-def read_tick(self,tick='30'):
-#        ['1','3','6','10','30']
-    self.SetInputValue("종목코드"	,  "005930")
-	#틱범위 = 1:1틱, 3:3틱, 5:5틱, 10:10틱, 30:30틱
-    self.SetInputValue("틱범위"	,  tick)
-#    	수정주가구분 = 0 or 1, 수신데이터 1:유상증자, 2:무상증자, 4:배당락, 8:액면분할, 16:액면병합, 32:기업합병, 64:감자, 256:권리락
-    self.SetInputValue("수정주가구분"	,  "1")
-#        InputValue("수정주가구분"	,  "1");
-    ret = self.CommRqData( "틱정보"	,  "opt10079"	,  "0"	,  self.scr_num)
-    print('return :',ret)
-
-def read_day(self, date='20160102'):
-#        ['1','3','6','10','30']
-    self.SetInputValue("종목코드"	,  "005930")
-#	기준일자 = YYYYMMDD (20160101 연도4자리, 월 2자리, 일 2자리 형식)
-    self.SetInputValue("기준일자"	,  date)
-#    	수정주가구분 = 0 or 1, 수신데이터 1:유상증자, 2:무상증자, 4:배당락, 8:액면분할, 16:액면병합, 32:기업합병, 64:감자, 256:권리락
-    self.SetInputValue("수정주가구분"	,  "1")
-#        InputValue("수정주가구분"	,  "1");
-    ret = self.CommRqData( "일데이터"	,  "opt10081"	,  "0"	,  self.scr_num)
-    print('return :',ret)
-
-
-
-            
     
+    
+    def read_tick(self, code='005930',tick='30'):
+    #        ['1','3','6','10','30']
+        self.SetInputValue("종목코드"	,  code)
+    	#틱범위 = 1:1틱, 3:3틱, 5:5틱, 10:10틱, 30:30틱
+        self.SetInputValue("틱범위"	,  tick)
+    #    	수정주가구분 = 0 or 1, 수신데이터 1:유상증자, 2:무상증자, 4:배당락, 8:액면분할, 16:액면병합, 32:기업합병, 64:감자, 256:권리락
+        self.SetInputValue("수정주가구분"	,  "1")
+    #        InputValue("수정주가구분"	,  "1");
+        ret = self.CommRqData( "틱정보"	,  "opt10079"	,  "0"	,  self.scr_num)
+        print('return :',ret)
+        self.tr_event_loop = QEventLoop()
+        self.tr_event_loop.exec_()
+    
+    def read_day(self, code='005930', date='20160102'):
+    #        ['1','3','6','10','30']
+        self.SetInputValue("종목코드"	,  code)
+    #	기준일자 = YYYYMMDD (20160101 연도4자리, 월 2자리, 일 2자리 형식)
+        self.SetInputValue("기준일자"	,  date)
+    #    	수정주가구분 = 0 or 1, 수신데이터 1:유상증자, 2:무상증자, 4:배당락, 8:액면분할, 16:액면병합, 32:기업합병, 64:감자, 256:권리락
+        self.SetInputValue("수정주가구분"	,  "1")
+    #        InputValue("수정주가구분"	,  "1");
+        ret = self.CommRqData( "일데이터"	,  "opt10081"	,  "0"	,  self.scr_num)
+        print('return :',ret)
+        self.tr_event_loop = QEventLoop()
+        self.tr_event_loop.exec_()
+    
+    def read_stock_code(self, code='005930'):
+        self.SetInputValue("종목코드"	,  code)
+        ret = self.CommRqData( "주식기본정보요청"	,  "opt10001"	,  "0"	,  self.scr_num)
+        print('return :',ret)
+        self.tr_event_loop = QEventLoop()
+        self.tr_event_loop.exec_()
+            
+
+
+
+
 app = QApplication(sys.argv)
 kk = Kiwoom()
 kk.CommConnect()
