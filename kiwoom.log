@@ -1,1 +1,1 @@
-2019-05-16 22:13:44,134 - Kiwoom - ERROR    - eventConnect 파라미터로 사용할 수 없는 값 입니다.
+2019-06-20 22:55:02,324 - Kiwoom - ERROR    - eventConnect GetLoginInfo() takes 1 positional argument but 3 were given

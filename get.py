@@ -6,7 +6,7 @@ df = pd.read_excel("./List.xlsx")
 df = df[['회사명','종목코드']].iloc[0:10]
 
 for idx, row in df.iterrows():
-    row[1]
+    print(row[1])
     
 
 

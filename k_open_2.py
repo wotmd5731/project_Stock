@@ -19,9 +19,20 @@ from define import RealType,FidList,ReturnCode
 
 import queue
 
+from multiprocessing import Process, Lock
 
 
-
+class mylock():
+    def __init__(self):
+        self.lock = Lock()
+        self.name = ""
+        self.data = []
+        self.tr_code = 0
+    def __enter__(self):
+        self.lock.acquire()
+    def __exit__(self, type, value, traceback):
+        self.lock.release()
+        
 
 class Kiwoom(QAxWidget):
     def __init__(self):
@@ -29,8 +40,13 @@ class Kiwoom(QAxWidget):
         print('setup kiwoom')
         self.setControl("KHOPENAPI.KHOpenAPICtrl.1")
         self.scr_num ='99'
-        self.q = queue.Queue(maxsize=50)
+#        self.q = queue.Queue(maxsize=1)
         
+        self.lock = mylock()
+        
+        
+        
+            
         # Loop 변수
         # 비동기 방식으로 동작되는 이벤트를 동기화(순서대로 동작) 시킬 때
         self.login_loop = None
@@ -75,7 +91,65 @@ class Kiwoom(QAxWidget):
 #        self.OnReceiveConditionVer.connect(self.receive_condition_ver)
 #        self.OnReceiveTrCondition.connect(self.receive_tr_condition)
 #        self.OnReceiveRealCondition.connect(self.receive_real_condition)
-    
+        self.dic = {
+            '주식기본정보요청':'OPT10001',
+            '주식거래원요청':'OPT10002',
+            '체결정보요청':'OPT10003',
+            '주식호가요청':'OPT10004',
+            '주식일주월시분요청':'OPT10005',
+            '주식시분요청':'OPT10006',
+            '시세표성정보요청':'OPT10007',
+            '주식외국인요청':'OPT10008',
+            '주식기관요청':'OPT10009',
+            '업종프로그램요청':'OPT10010',
+            '투자자정보요청':'OPT10011',
+            '주문체결요청':'OPT10012',
+            '신용매매동향요청':'OPT10013',
+            '공매도추위요청':'OPT10014',
+            '일별거래상세요청':'OPT10015',
+            '신고저가요청':'OPT10016',
+            '상하한가요청':'OPT10017',
+            '고저가근접요청':'OPT10018',
+            '가격급등락요청':'OPT10019',
+            '호가잔량상위요청':'OPT10020',
+            '호가잔량급증요청':'OPT10021',
+            '잔량율급증요청':'OPT10022',
+            '거래량급증요청':'OPT10023',
+            '거래량갱신요청':'OPT10024',
+            '매물대집중요청':'OPT10025',
+            '고저PER됴청':'OPT10026',
+            '전일대비등락율상위요청':'OPT10027',
+            '시가대비등락율요쳥':'OPT10028',
+            '예상체결등락률상위요청':'OPT10029',
+            '당일거래량상위요청':'OPT10030',
+            '전일거래량상위요청':'OPT10031',
+            '거래대금상위요청':'OPT10032',
+            '신용비율상위요청':'OPT10033',
+            '외인기간별매매상위요청':'OPT10034',
+            '외인연속순매매상위요청':'OPT10035',
+            '매매상위요청':'OPT10036',
+            '외국계창구매매상위요청':'OPT10037',
+            '종목별증권사순위요청':'OPT10038',
+            '증권사별매매상위요청':'OPT10039',
+            '당일주요거래원요청':'OPT10040',
+            '조기종료통화단위요청':'OPT10041',
+            '순매수거래원순위요청':'OPT10042',
+            '거래원매물대분석요청':'OPT10043',
+            '일별기관매매종목요청':'OPT10044',
+            '종목별기관매매추이요청':'OPT10045',
+            '투자자별일별매매종목요청':'OPT10058',
+            '종목별투자자기관별요청':'OPT10059',
+            '종목별투자자기관별차트요청':'OPT10060',
+            '종목별투자자기관별합계요청':'OPT10061',
+            '동일순매매순위요청':'OPT10062',
+            '장중투자자별매매요청':'OPT10063',
+            '장중투자자별매매차트요청':'OPT10064',
+            '장중투자자별매매상위요청':'OPT10065',
+            '일자별실현손익요청':'OPT10074',
+            '실시간미체결요청':'OPT10075',
+            '실시간체결요청':'OPT10076',
+            '당일실현손익상세요청':'OPT10077',
+           }            
     
     def _OnReceiveTrData(self, screen_no, request_name, tr_code, record_name, sPrevNext, unused0, unused1, unused2,
                            unused3):
@@ -90,16 +164,42 @@ class Kiwoom(QAxWidget):
         """
         if screen_no != self.scr_num:
             print('diff scr num')
-        if request_name=='틱정보' and tr_code == 'opt10079':
-            print(self.GetCommDataEx(tr_code,record_name))
             
-        if request_name=='일데이터' and tr_code == 'opt10081':
-            print(self.GetCommDataEx(tr_code,record_name))
-        if request_name=='주식기본정보요청' and tr_code == 'opt10001':
+#        with self.lock:
+#            self.lock.name = request_name
+#            self.lock.tr_code = tr_code
+#            self.lock.data = []
+            
+        if request_name=='주식기본정보요청':
+            temp_dic = {}
             lst = ['종목코드','종목명','자본금','액면가','상장주식','신용비율','외인소진률','시가총액','PER','EPS','BPS','PBR','매출액','영업이익','당기순이익','시가','고가','저가','기준가','현재가','전일대비','등락율','거래량','거래대비','유통주식','유통비율']
-#            print(self.GetRepeatCnt(tr_code,request_name))
             for st in lst:
-                print(st,' : ', self.GetCommData(tr_code,"", request_name, 0,st))
+                temp_dic[st] = self.GetCommData(tr_code,"", request_name, 0,st)
+            self.lock.data = temp_dic
+            
+#        if request_name=='주식거래원요청' or \
+#            request_name=='체결정보요청' or \
+#            request_name=='주식호가요청' or\
+#            request_name=='주식일주월시분요청' or\
+#            request_name=='주식시분요청' :
+#            self.lock.data= self.GetCommDataEx(tr_code,record_name)
+                
+        if request_name=='조건검색A':
+            pass
+        
+        
+#        dic_list = self.dic.keys()
+#        if request_name==dic_list[0] and tr_code == 'opt10079':
+#            print(self.GetCommDataEx(tr_code,record_name))
+        
+        
+        
+#        if request_name=='틱정보' and tr_code == 'opt10079':
+#            print(self.GetCommDataEx(tr_code,record_name))
+#            
+#        if request_name=='일데이터' and tr_code == 'opt10081':
+#            print(self.GetCommDataEx(tr_code,record_name))
+        
             
             
         self.tr_event_loop.exit()
@@ -182,15 +282,14 @@ class Kiwoom(QAxWidget):
         
     def GetLoginInfo(self):
         """
-    "ACCOUNT_CNT" : 보유계좌 수를 반환합니다.
-      "ACCLIST" 또는 "ACCNO" : 구분자 ';'로 연결된 보유계좌 목록을 반환합니다.
-      "USER_ID" : 사용자 ID를 반환합니다.
-      "USER_NAME" : 사용자 이름을 반환합니다.
-      "KEY_BSECGB" : 키보드 보안 해지여부를 반환합니다.(0 : 정상, 1 : 해지)
-      "FIREW_SECGB" : 방화벽 설정여부를 반환합니다.(0 : 미설정, 1 : 설정, 2 : 해지)
-      "GetServerGubun" : 접속서버 구분을 반환합니다.(1 : 모의투자, 나머지 : 실서버)
-          
-    """
+        "ACCOUNT_CNT" : 보유계좌 수를 반환합니다.
+          "ACCLIST" 또는 "ACCNO" : 구분자 ';'로 연결된 보유계좌 목록을 반환합니다.
+          "USER_ID" : 사용자 ID를 반환합니다.
+          "USER_NAME" : 사용자 이름을 반환합니다.
+          "KEY_BSECGB" : 키보드 보안 해지여부를 반환합니다.(0 : 정상, 1 : 해지)
+          "FIREW_SECGB" : 방화벽 설정여부를 반환합니다.(0 : 미설정, 1 : 설정, 2 : 해지)
+          "GetServerGubun" : 접속서버 구분을 반환합니다.(1 : 모의투자, 나머지 : 실서버)
+        """
         dic={}
         for tag in ["ACCOUNT_CNT","ACCNO","USER_ID","USER_NAME","GetServerGubun" ]:
             dic[tag] = self.dynamicCall('GetLoginInfo("{0}")'.format(tag))
@@ -206,12 +305,50 @@ class Kiwoom(QAxWidget):
     def CommRqData(self,sRQName, sTrCode, nPrevNext, sScreenNo ):
 #        self.dynamicCall('CommRqData({},{},{},{})'.format(sRQName, sTrCode, nPrevNext, sScreenNo)) 
         return self.dynamicCall("CommRqData(QString, QString, int, QString)", sRQName, sTrCode, nPrevNext, sScreenNo)
-    
+    def CommKwRqData(self,Arrcode , bnext, nCodecount,ntypeflag, sRQname, sScreenNo ):
+#        self.dynamicCall('CommRqData({},{},{},{})'.format(sRQName, sTrCode, nPrevNext, sScreenNo)) 
+        return self.dynamicCall("CommKwRqData(QString, int , int, int, QString,QString)",Arrcode , bnext, nCodecount,ntypeflag, sRQname, sScreenNo)
+       
     def SetInputValue(self, id, value):
         self.dynamicCall("SetInputValue(QString, QString)", id, value)
     
     
     
+
+    
+
+    def read_opt(self,req='체결정보요청', code='005930'):
+        
+        opt = self.dic[req]
+        self.SetInputValue("종목코드"	,  code)
+        ret = self.CommRqData( req,  opt	,  "0"	,  self.scr_num)
+        print('return :',ret)
+        self.tr_event_loop = QEventLoop()
+        self.tr_event_loop.exec_()
+        
+        with self.lock:
+            print(self.lock.name,
+            self.lock.tr_code ,
+            self.lock.data)
+            
+        return 
+    
+    def read_kwrq(self,req='체결정보요청', code='005930'):
+        
+        opt = self.dic[req]
+        self.SetInputValue("종목코드"	,  code)
+        codelist = ['005930','005930','005930']
+        
+        ret = self.CommKwRqData(codelist ,  0	, len(codelist), 0	,'KW100_REQ', self.scr_num)
+        print('return :',ret)
+        self.tr_event_loop = QEventLoop()
+        self.tr_event_loop.exec_()
+        
+        
+            
+        return 
+    
+        
     def read_tick(self, code='005930',tick='30'):
     #        ['1','3','6','10','30']
         self.SetInputValue("종목코드"	,  code)
@@ -222,8 +359,12 @@ class Kiwoom(QAxWidget):
     #        InputValue("수정주가구분"	,  "1");
         ret = self.CommRqData( "틱정보"	,  "opt10079"	,  "0"	,  self.scr_num)
         print('return :',ret)
-        self.tr_event_loop = QEventLoop()
+        
         self.tr_event_loop.exec_()
+        
+        
+        
+        
     
     def read_day(self, code='005930', date='20160102'):
     #        ['1','3','6','10','30']
@@ -244,9 +385,9 @@ class Kiwoom(QAxWidget):
         print('return :',ret)
         self.tr_event_loop = QEventLoop()
         self.tr_event_loop.exec_()
-            
-
-
+        
+        
+    
 
 
 app = QApplication(sys.argv)
